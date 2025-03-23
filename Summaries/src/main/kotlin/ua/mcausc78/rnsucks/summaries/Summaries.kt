@@ -40,32 +40,6 @@ class SummariesPlugin : Plugin() {
     private val summaries: MutableMap<Long, MutableList<Summary>> = mutableMapOf()
 
     override fun start(context: Context) {
-        // {
-        //     "channel_id": "125227483518861312",
-        //     "guild_id": "125227483518861312",
-        //     "summaries": [
-        //         {
-        //             "count": 3,
-        //             "end_id": "1305299001427628052",
-        //             "id": "1305306704509927516",
-        //             "message_ids": [
-        //                 "1305298903226126346",
-        //                 "1305298947706851410",
-        //                 "1305299001427628052"
-        //             ],
-        //             "people": [
-        //                 "222046562543468545",
-        //                 "198341984346308609"
-        //             ],
-        //             "source": 2,
-        //             "start_id": "1305298903226126346",
-        //             "summ_short": "Alessandro has updated the dependencies but still gets the same error when upgrading from previous versions.",
-        //             "topic": "Log4j 2.24.1 Upgrade",
-        //             "type": 3,
-        //             "unsafe": false
-        //         }
-        //     ]
-        // }
         GatewayAPI.onEvent<ConversationSummaryUpdate>("CONVERSATION_SUMMARY_UPDATE") { event ->
             val channelId = event.channelId
             val guildId = event.guildId
@@ -86,26 +60,22 @@ class SummariesPlugin : Plugin() {
                 logger.verbose("Summaries updated in $channelName (ID: $channelId) at $guildName (ID: $guildId)")
             }
 
-            val summaries = this.summaries[channelId]
-            if (summaries == null) {
-                this.summaries[channelId] = event.summaries.toMutableList()
-            } else {
-                val summaryIds = summaries.map { it.id }
+            val summaries = this.summaries[channelId] ?: mutableListOf()
+            val summaryIds = summaries.map { it.id }
 
-                for (summary in event.summaries) {
-                    val index = summaryIds.indexOf(summary.id)
-                    if (index == -1) {
-                        // new summary
-                        summaries.add(summary)
-                    } else {
-                        // update summary (?)
-                        // TODO: figure out if CONVERSATION_SUMMARY_UPDATE is just dispatched when a summary is added?
-                        summaries[index] = summary
-                    }
+            for (summary in event.summaries) {
+                val index = summaryIds.indexOf(summary.id)
+                if (index == -1) {
+                    // new summary
+                    summaries.add(summary)
+                } else {
+                    // update summary
+                    summaries[index] = summary
                 }
-
-                summaries.sortBy { it.id }
             }
+
+            summaries.sortBy { it.id }
+            this.summaries[channelId] = summaries
         }
 
         commands.registerCommand("summaries", "Shows current summaries") { ctx ->
@@ -117,9 +87,8 @@ class SummariesPlugin : Plugin() {
                     false
                 )
             }
-            var result = "Summaries:\n"
-            for (summary in summaries) {
-                result += "- **${summary.topic}**: ${summary.summShort} (${summary.messageIds.size} messages and ${summary.people.size} people involved)\n"
+            val result = summaries.joinToString(separator = "\n") { summary ->
+                "- **${summary.topic}**: ${summary.summShort} (${summary.messageIds.size} messages and ${summary.people.size} people involved)"
             }
             CommandsAPI.CommandResult(result, null, false)
         }
